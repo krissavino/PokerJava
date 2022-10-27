@@ -93,23 +93,25 @@ public class Server implements IServer
     public void removeClient(Socket socket)
     {
         for(Map.Entry<ClientSocket, Player> entry: playersInQueue.entrySet()) {
-            if(entry.getKey().getSocket() == socket)
+            if(entry.getKey().getSocket() == socket) {
                 playersInQueue.remove(entry.getKey());
+                if(playersInQueue.isEmpty())
+                    break;
+            }
         }
-        Iterator<Map.Entry<ClientSocket,Player>> iterator = playersInGame.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<ClientSocket,Player> entry = iterator.next();
+        for(Map.Entry<ClientSocket, Player> entry: playersInGame.entrySet()) {
             if(entry.getKey().getSocket() == socket){
-               /* pokerGame.setPlayerLeft(playersInGame.get(entry.getKey()).getPlace());
+                pokerGame.setPlayerLeft(playersInGame.get(entry.getKey()).getPlace());
                 if(pokerGame.getWinnerIndex() > -1) {
                     isGameStarted = false;
                     startGameTimer(0);
                 }
-                sendUpdateToPlayers();*/
-                iterator.remove();
+                sendUpdateToPlayers();
+                playersInGame.remove(entry.getKey());
+                if(playersInGame.isEmpty())
+                    break;
             }
         }
-
         clients.remove(socket);
         clientsCount--;
     }

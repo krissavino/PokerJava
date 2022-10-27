@@ -8,6 +8,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -404,6 +406,30 @@ public class ClientWindow extends JFrame {
                     myClient.sendMessage(commandModel.getString());
                     startSpamTimer();
                 }
+            }
+        });
+        this.addComponentListener(new ComponentListener() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                if (e.getSource() instanceof JFrame) {
+                    JFrame frame = (JFrame)(e.getSource());
+                   // frame.repaint();
+                }
+            }
+
+            @Override
+            public void componentMoved(ComponentEvent e) {
+
+            }
+
+            @Override
+            public void componentShown(ComponentEvent e) {
+
+            }
+
+            @Override
+            public void componentHidden(ComponentEvent e) {
+
             }
         });
     }
