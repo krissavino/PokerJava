@@ -15,6 +15,7 @@ public class Poker
     private int dealerIndexTurn = 0;
     private int playersAtTheTable = 0;
     private int winnerIndex = -1;
+    private boolean canBigBlindBet = true;
     private GameStage gameStage = GameStage.Preflop;
 
     private void ShuffleCards()
@@ -38,48 +39,74 @@ public class Poker
         for(Player p : players)
             p.bet = -1;
         gameStage = GameStage.Preflop;
+        blindMoves();
+        canBigBlindBet = true;
     }
 
-    public void move(int playerPlace, String moveType, int bet) {
+    public void move(int playerPlace, String moveType, int moveBet) {
         if(moveType.equals("BET")) {
             for(Player p : players) {
                 if(playerPlace == p.place)
                 {
-                    p.chips -= bet;
-                    p.bet = bet;
+                    p.chips -= moveBet;
+                    if(p.bet == -1)
+                        p.bet = moveBet;
+                    else
+                        p.bet += moveBet;
+                    p.lastMove = moveType;
                 }
             }
-            pot += bet;
-            this.bet = bet;
+            this.pot += moveBet;
+            this.bet = moveBet;
         }
         if(moveType.equals("FOLD")) {
             for (Player p : players) {
                 if(p.getPlace() == playerPlace) {
                     p.isFold = true;
                     p.bet = -1;
+                    p.lastMove = moveType;
                 }
             }
         }
         if(moveType.equals("CHECK")) {
             for (Player p : players) {
                 if(p.getPlace() == playerPlace) {
-                    p.bet = 0;
+                    p.lastMove = moveType;
+                    if(p.bet == -1)
+                        p.bet = 0;
                 }
             }
         }
         if(moveType.equals("RAISE")) {
             for (Player p : players) {
                 if(p.getPlace() == playerPlace) {
-                    p.chips -= bet;
-                    p.bet += bet;
+                    p.chips -= moveBet;
+                    if(p.bet == -1)
+                        p.bet = moveBet;
+                    else
+                        p.bet += moveBet;
+                    p.lastMove = moveType;
+                    if(this.bet == 0)
+                        this.bet = moveBet;
+                    else
+                        this.bet += moveBet;
+                    this.pot += moveBet;
                 }
             }
         }
         if(moveType.equals("CALL")) {
             for (Player p : players) {
                 if(p.getPlace() == playerPlace) {
-                    p.chips -= (this.bet - p.bet);
+                    if(p.bet > 0) {
+                        p.chips -= (this.bet - p.bet);
+                        this.pot += (this.bet - p.bet);
+                    }
+                    else {
+                        p.chips -= this.bet;
+                        this.pot += this.bet;
+                    }
                     p.bet = this.bet;
+                    p.lastMove = moveType;
                 }
             }
         }
@@ -87,31 +114,48 @@ public class Poker
         checkForStage();
         checkForFoldWinner();
     }
-
+    public void blindMoves() {
+        this.move(playerIndexTurn, "BET", 5);
+        this.move(playerIndexTurn, "BET", 10);
+    }
     public void checkForStage() {
         boolean nextGameStage = true;
-        int equalBet = 0;
-        for(Player p : players) {
-             if(!p.isFold())
-             {
-                 equalBet = p.bet;
-                 break;
-             }
-        }
-        for(Player p : players) {
-            if(p.bet > -1 && p.bet == equalBet);
+        for(Player p : players) { // IF ALL PLAYERS HAVE CHECKED
+            if(p.bet == 0 && p.bet == this.bet);
             else nextGameStage = false;
         }
+        if(!nextGameStage) {
+            nextGameStage = true;
+            for (Player p : players) { // IF SOMEONE CALLED AFTER BIG BLIND BET
+                if (p.bet == this.bet) ;
+                else nextGameStage = false;
+            }
+            if(canBigBlindBet) {
+                int prefix = (playersAtTheTable > 2 ? 2 : 0);
+                for(Player p : players) {
+                    if(p.getPlace() == ((dealerIndexTurn+prefix)%playersAtTheTable)) {
+                        if(!p.getLastMove().equals("CHECK")) {
+                            nextGameStage = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        System.out.println("Is next stage : " + nextGameStage);
         if(nextGameStage) {
             if(gameStage == GameStage.River) {
                 checkForWinner();
             } else {
                 gameStage = gameStage.next();
+                canBigBlindBet = false;
+                playerIndexTurn = (dealerIndexTurn+1)%playersAtTheTable;
                 int howMuchCardsToOpen = gameStage.ordinal() + 2;
                 for (int i = 0; i < howMuchCardsToOpen; i++)
                     cardsOnTable.get(i).setOpened(true);
                 for (Player p : players)
                     p.bet = -1;
+                this.bet = 0;
             }
         }
     }
@@ -121,10 +165,15 @@ public class Poker
         for (Player p : players) {
             if(p.isFold()) foldCounter++;
         }
+        if(foldCounter == playersAtTheTable) {
+            System.out.println("All players gone...");
+            winnerIndex = 0;
+        }
         if(foldCounter == playersAtTheTable - 1) {
             for (Player p : players) {
                 if(!p.isFold())
                 {
+                    System.out.println("Winner index: " + winnerIndex);
                     winnerIndex = p.getPlace();
                 }
             }
@@ -198,25 +247,38 @@ public class Poker
         return playerIndexTurn;
     }
 
+    public void setPlayerLeft(int place) {
+        for(Player p : players)
+            if(p.getPlace() == place)
+                p.setFold(true);
+        checkForFoldWinner();
+    }
+
     private void CreatePlayers(int howManyPlayers)
     {
         if(!players.isEmpty()) {
             players.clear();
             dealerIndexTurn = (dealerIndexTurn+1) % howManyPlayers;
         }
-        playerIndexTurn = (dealerIndexTurn+1) % howManyPlayers;
-
-        for (int counter = 0; counter < howManyPlayers; counter++)
-        {
-            players.add(new Player(counter));
-            players.get(counter).setRole("Player");
-            if(counter == dealerIndexTurn)
-                players.get(counter).setRole("Dealer");
-            if(counter == (dealerIndexTurn+1)%howManyPlayers)
-                players.get(counter).setRole("Small Blind");
-            if(howManyPlayers > 2)
-                if(counter == (dealerIndexTurn+2)%howManyPlayers)
-                    players.get(counter).setRole("Big Blind");
+        if(howManyPlayers == 2) {
+            playerIndexTurn = (dealerIndexTurn+1) % howManyPlayers;
+            players.add(new Player(0));
+            players.add(new Player(1));
+            players.get(dealerIndexTurn).setRole("Big Blind");
+            players.get(playerIndexTurn).setRole("Small Blind");
+        } else {
+            playerIndexTurn = (dealerIndexTurn+1) % howManyPlayers;
+            for (int counter = 0; counter < howManyPlayers; counter++) {
+                players.add(new Player(counter));
+                players.get(counter).setRole("Player");
+                if (counter == dealerIndexTurn)
+                    players.get(counter).setRole("Dealer");
+                if (counter == (dealerIndexTurn + 1) % howManyPlayers)
+                    players.get(counter).setRole("Small Blind");
+                if (howManyPlayers > 2)
+                    if (counter == (dealerIndexTurn + 2) % howManyPlayers)
+                        players.get(counter).setRole("Big Blind");
+            }
         }
     }
 

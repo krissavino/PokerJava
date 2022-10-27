@@ -8,9 +8,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.*;
 import java.util.ArrayList;
 import java.util.Timer;
+import java.util.TimerTask;
 
 public class ClientWindow extends JFrame {
     private JPanel mainPanel;
@@ -67,15 +67,20 @@ public class ClientWindow extends JFrame {
     private JLabel player2BetLabel;
     private JLabel player3BetLabel;
     private JLabel player4BetLabel;
+    private JLabel chipsLabel;
+    private JLabel myBetLabel;
     private JLabel[] tableCardLabels;
     private JLabel[] playerLabels;
     private JLabel[][] playersCards;
     private JLabel roleLabel;
 
     private JProgressBar[] playersProgressBars;
+    private JLabel[] playersBetLabels;
+    private boolean isSpam = false;
+    private Timer spamTimer;
     private Timer progressBarTimer;
     private int playerTurnIndex = 0;
-    private int myPlace = 0;
+    private Player myPlayer;
     private int winnerIndex;
     private int pot = 0;
     private int currentBet = 0;
@@ -91,8 +96,9 @@ public class ClientWindow extends JFrame {
         if(player.role.equals("Small Blind")) {
             playerLabels[player.place].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("interface/small_blind_user.png")).getImage().getScaledInstance(100, 100, Image.SCALE_SMOOTH)));
         }
-        if(player.role.equals("Dealer"))
+        if(player.role.equals("Dealer")) {
             playerLabels[player.place].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("interface/dealer_user.png")).getImage().getScaledInstance(100, 100, Image.SCALE_SMOOTH)));
+        }
         playerLabels[player.place].setText(player.nickName);
         playerLabels[player.place].setHorizontalTextPosition(JLabel.CENTER);
         playerLabels[player.place].setVerticalTextPosition(JLabel.BOTTOM);
@@ -114,16 +120,18 @@ public class ClientWindow extends JFrame {
         for(Player p : players) {
             if(p == null) continue;
             if(p.isFold) continue;
-            for(int i = 0; i < p.hand.size(); i++)
-                playersCards[p.place][i].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("cards/shirt.png")).getImage().getScaledInstance(75, 100, Image.SCALE_SMOOTH)));
+            for(int i = 0; i < p.hand.size(); i++) {
+                if(p.getPlace() != myPlayer.getPlace())
+                    playersCards[p.place][i].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("cards/shirt.png")).getImage().getScaledInstance(75, 100, Image.SCALE_SMOOTH)));
+            }
         }
     }
     public void showMyCards(Player me) {
+        myPlayer = me;
         if(me == null) return;
         for(int i = 0; i < me.hand.size(); i++)
             myCards[i].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("cards/" + me.hand.get(i).GetColor() + "/" + me.hand.get(i).GetName() + ".jpg")).getImage().getScaledInstance(150, 200, Image.SCALE_SMOOTH)));
-        myPlace = me.place;
-        playerLabels[myPlace].setVisible(false);
+        playerLabels[me.place].setVisible(false);
     }
     public void startGame() {
         for(JLabel jl : tableCardLabels) {
@@ -141,13 +149,23 @@ public class ClientWindow extends JFrame {
         myProgressBar.setValue(0);
         myProgressBar.setVisible(false);
     }
+    public void startSpamTimer() {
+        spamTimer.purge();
+        isSpam = true;
+        spamTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                isSpam = false;
+            }
+        }, 300);
+    }
     public void startProgressBar() {
         stopProgressBar();
         System.out.println("Client window player turn: " + playerTurnIndex);
         for(JProgressBar pb : playersProgressBars) {
             pb.setVisible(false);
         }
-        if(myPlace == playerTurnIndex) {
+        if(myPlayer.getPlace() == playerTurnIndex) {
             myProgressBar.setVisible(true);
         }
         else {
@@ -158,7 +176,7 @@ public class ClientWindow extends JFrame {
         progressBarTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                if(playerTurnIndex == myPlace) {
+                if(playerTurnIndex == myPlayer.getPlace()) {
                     myProgressBar.setValue(myProgressBar.getValue()+5);
                     if(myProgressBar.getValue() >= 100) {
                         progressBarTimer.cancel();
@@ -182,6 +200,42 @@ public class ClientWindow extends JFrame {
     public void setPot(int pot) {
         this.pot = pot;
         potLabel.setText(String.valueOf(pot));
+    }
+
+    public void setChips(int chips) {
+        chipsLabel.setText("CHIPS: " + chips);
+    }
+
+    public void setMyBet(int bet) {
+        myBetLabel.setText("BET: " + bet);
+    }
+
+    public void setMyPlayer(Player player) {
+        System.out.println("WTF" + player.getBet());
+        myPlayer = player;
+        setChips(myPlayer.getChips());
+        setMyBet(myPlayer.getBet());
+    }
+
+    public void setPlayersBets(ArrayList<Player> players) {
+        for(Player p : players) {
+            if(p.getPlace() == myPlayer.getPlace())
+            {
+                if(p.getBet() == 0)
+                    myBetLabel.setText("CHECK");
+                if(p.getBet() == -1)
+                    myBetLabel.setText("");
+                if(p.getBet() > 0)
+                    myBetLabel.setText("BET: " + p.getBet());
+                continue;
+            }
+            if(p.getBet() == 0)
+                playersBetLabels[p.getPlace()].setText("CHECK");
+            if(p.getBet() == -1)
+                playersBetLabels[p.getPlace()].setText("...");
+            if(p.getBet() > 0)
+                playersBetLabels[p.getPlace()].setText("BET: " + p.getBet());
+        }
     }
 
     public void setTableCards(ArrayList<Card> cards) {
@@ -216,6 +270,20 @@ public class ClientWindow extends JFrame {
         stopProgressBar();
         if(winnerIndex < 0) return;
         playerLabels[winnerIndex].setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("interface/winner_user.png")).getImage().getScaledInstance(100, 100, Image.SCALE_SMOOTH)));
+    }
+
+    public void setMoveButtons() {
+        if((currentBet == 0)||(currentBet == myPlayer.bet)) {
+            CALLButton.setVisible(false);
+            RAISEButton.setVisible(false);
+            BETButton.setVisible(true);
+            CHECKButton.setVisible(true);
+        } else {
+            CALLButton.setVisible(true);
+            RAISEButton.setVisible(true);
+            BETButton.setVisible(false);
+            CHECKButton.setVisible(false);
+        }
     }
 
     public ClientWindow(Client client) {
@@ -262,64 +330,79 @@ public class ClientWindow extends JFrame {
         }
         progressBarTimer = new Timer();
         chipsImage.setIcon(new ImageIcon(new ImageIcon(this.getClass().getResource("interface/chips.png")).getImage().getScaledInstance(50,50,Image.SCALE_SMOOTH)));
-        JLabel[] playersBetLabels = new JLabel[4];
+        playersBetLabels = new JLabel[4];
         playersBetLabels[0] = player1BetLabel;
         playersBetLabels[1] = player2BetLabel;
         playersBetLabels[2] = player3BetLabel;
         playersBetLabels[3] = player4BetLabel;
 
+        setMoveButtons();
+
         setContentPane(mainPanel);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         pack();
         setVisible(true);
-
         CommandModel commandModel = new CommandModel();
+        spamTimer = new Timer();
         BETButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if(myPlace != playerTurnIndex) return;
+                if(myPlayer.getPlace() != playerTurnIndex) return;
+                if(isSpam) return;
                 if(e.getSource() == BETButton) {
                     int bet = Integer.parseInt(betComboBox.getSelectedItem().toString());
-                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlace, "BET", bet);
+                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlayer.getPlace(), "BET", bet);
                     myClient.sendMessage(commandModel.getString());
+                    startSpamTimer();
                 }
             }
         });
         CHECKButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if(myPlayer.getPlace() != playerTurnIndex) return;
+                if(isSpam) return;
                 if(e.getSource() == CHECKButton) {
-                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlace, "CHECK", 0);
+                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlayer.getPlace(), "CHECK", 0);
                     myClient.sendMessage(commandModel.getString());
+                    startSpamTimer();
                 }
             }
         });
         CALLButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if(e.getSource() == CHECKButton) {
-                    int bet = Integer.parseInt(betComboBox.getSelectedItem().toString());
-                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlace, "CALL", bet);
+                if(myPlayer.getPlace() != playerTurnIndex) return;
+                if(isSpam) return;
+                if(e.getSource() == CALLButton) {
+                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlayer.getPlace(), "CALL", 0);
                     myClient.sendMessage(commandModel.getString());
+                    startSpamTimer();
                 }
             }
         });
         RAISEButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if(myPlayer.getPlace() != playerTurnIndex) return;
+                if(isSpam) return;
                 if(e.getSource() == CHECKButton) {
                     int bet = Integer.parseInt(betComboBox.getSelectedItem().toString());
-                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlace, "RAISE", bet);
+                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlayer.getPlace(), "RAISE", bet);
                     myClient.sendMessage(commandModel.getString());
+                    startSpamTimer();
                 }
             }
         });
         FOLDButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if(myPlayer.getPlace() != playerTurnIndex) return;
+                if(isSpam) return;
                 if(e.getSource() == FOLDButton) {
-                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlace, "FOLD", 0);
+                    commandModel.set(CommandEnum.SendPlayerMoveToServer.toString(), myPlayer.getPlace(), "FOLD", 0);
                     myClient.sendMessage(commandModel.getString());
+                    startSpamTimer();
                 }
             }
         });

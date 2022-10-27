@@ -9,6 +9,8 @@ public class Player {
     List<Card> hand = new ArrayList<>();
     int chips;
     boolean isFold = false;
+    boolean isMoved = false;
+    String lastMove = "CHECK";
     String role = "Player";
     int bet = -1;
     int score;
@@ -30,8 +32,24 @@ public class Player {
         return place;
     }
 
+    public int getChips() {
+        return chips;
+    }
+
+    public int getBet() {
+        return bet;
+    }
+
+    public void setBet(int bet) {
+        this.bet = bet;
+    }
+
     public String getRole() {
         return role;
+    }
+
+    public String getLastMove() {
+        return lastMove;
     }
 
     public void setRole(String role) {

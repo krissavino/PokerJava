@@ -1,9 +1,9 @@
 package Client;
 
 import Client.Interfaces.IClient;
-import PokerJava.Card;
 import PokerJava.ClientWindow;
 import PokerJava.Player;
+import PokerJava.Poker;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -15,7 +15,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 
 public class Client implements IClient
 {
@@ -27,11 +26,9 @@ public class Client implements IClient
     private int timeOut = 10;
 
     private ClientWindow clientWindow;
-    private ArrayList<Player> players;
+    private Poker pokerGame;
     private Player myPlayer;
-    private ArrayList<Card> tableCards;
     private int myPlace = 0;
-    private int playerTurnIndex = 0;
 
     public Client() {
         clientWindow = new ClientWindow(this);
@@ -45,7 +42,6 @@ public class Client implements IClient
         client.connect(2121);
         client2.connect(2121);
         client3.connect(2121);
-
         /*Client client = ClientContainer.getClient();
         client.connect(2121);
         client.sendMessage(CommandEnum.Empty.toString());*/
@@ -179,51 +175,39 @@ public class Client implements IClient
         if(commandName.equals("SendPlaceOnTableToClient")) {
             myPlace = (int)(Double.parseDouble(info[1]));
         }
-        if(commandName.equals("SendPokerInfoToClient")) {
-            players = gson.fromJson(info[1], new TypeToken<ArrayList<Player>>(){}.getType());
-            for(Player p : players) {
-                if(p.getRole().equals("Small Blind"))
-                    playerTurnIndex = p.getPlace();
-            }
-            clientWindow.setPlayerTurnIndex(playerTurnIndex);
-            tableCards = gson.fromJson(info[2], new TypeToken<ArrayList<Card>>(){}.getType());
-            for(Player p : players) {
+        if(commandName.equals("SendPokerInfoToClient")||commandName.equals("SendUpdateInfoToClient")) {
+            pokerGame = gson.fromJson(info[1], new TypeToken<Poker>(){}.getType());
+            clientWindow.setPlayerTurnIndex(pokerGame.getPlayerIndexTurn());
+            clientWindow.setTableCards(pokerGame.getCardsOnTable());
+            clientWindow.setPot(pokerGame.getPot());
+            clientWindow.setCurrentBet(pokerGame.getBet());
+            for(Player p : pokerGame.getPlayers()) {
                 if(p.getPlace() == myPlace) {
                     myPlayer = p;
+                    clientWindow.setMyPlayer(myPlayer);
                     clientWindow.showMyCards(myPlayer);
                 }
-                else {
-                    clientWindow.addPlayer(p);
-                }
+                clientWindow.addPlayer(p);
             }
-        clientWindow.startGame();
+            clientWindow.setPlayersBets(pokerGame.getPlayers());
+            clientWindow.showPlayersCards(pokerGame.getPlayers());
+            clientWindow.setMoveButtons();
+        }
+        if(commandName.equals("SendPokerInfoToClient")) {
+            clientWindow.startGame();
         }
         if(commandName.equals("SendUpdateInfoToClient")) {
-            players = gson.fromJson(info[1], new TypeToken<ArrayList<Player>>(){}.getType());
-            tableCards = gson.fromJson(info[2], new TypeToken<ArrayList<Card>>(){}.getType());
-            playerTurnIndex = gson.fromJson(info[3], int.class);
-            int pot = gson.fromJson(info[4], int.class);
-            int bet = gson.fromJson(info[5], int.class);
-            int winner = gson.fromJson(info[6], int.class);
-            clientWindow.setPot(pot);
-            clientWindow.setCurrentBet(bet);
-            clientWindow.setTableCards(tableCards);
-            if(winner > -1) {
-                clientWindow.setWinner(winner);
+            if(pokerGame.getWinnerIndex() > -1) {
+                clientWindow.setWinner(pokerGame.getWinnerIndex());
                 clientWindow.showWinner();
             } else {
-                clientWindow.setPlayerTurnIndex(playerTurnIndex);
+                clientWindow.setPlayerTurnIndex(pokerGame.getPlayerIndexTurn());
                 clientWindow.startProgressBar();
-                for (Player p : players) {
+                for (Player p : pokerGame.getPlayers()) {
                     if (p.isFold())
                         clientWindow.setPlayerFold(p.getPlace());
                 }
             }
         }
-    }
-
-    public void showCards() {
-        clientWindow.showMyCards(myPlayer);
-        clientWindow.showPlayersCards(players);
     }
 }

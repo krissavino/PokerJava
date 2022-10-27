@@ -1,6 +1,10 @@
 package testJson;
 
 
+import PokerJava.Poker;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
 public class JsonConverter
 {
 
@@ -33,6 +37,15 @@ public class JsonConverter
         cards.add(new Card(CardColor.Diamonds, CardName.Card_A));
         foo(players, cards);*/
         //test2
+
+        //test3
+        Poker poker = new Poker(2);
+        poker.startGame();
+        Gson gson = new Gson();
+        String message = gson.toJson(poker);
+        Poker poker2 = gson.fromJson(message, new TypeToken<Poker>(){}.getType());
+        System.out.println(poker2.getCardsOnTable());
+        //test3
     }
 
     //test2
@@ -50,6 +63,5 @@ public class JsonConverter
         System.out.println(cards2.get(0).GetName());
     }*/
     //test2
-
 
 }

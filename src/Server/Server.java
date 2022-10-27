@@ -22,8 +22,8 @@ public class Server implements IServer
 {
     private ServerSocket serverSocket;
     private final LinkedHashMap<Socket, ClientSocket> clients = new LinkedHashMap<Socket, ClientSocket>();
-    private final LinkedHashMap<ClientSocket, Player> playersInGame = new LinkedHashMap<ClientSocket, Player>();
-    private final LinkedHashMap<ClientSocket, Player> playersInQueue = new LinkedHashMap<ClientSocket, Player>();
+    private final Map<ClientSocket, Player> playersInGame = new HashMap<ClientSocket, Player>();
+    private final Map<ClientSocket, Player> playersInQueue = new HashMap<ClientSocket, Player>();
     private final LinkedHashMap<CommandEnum, ICommandManager> commands = new LinkedHashMap<CommandEnum, ICommandManager>();
 
     private Timer gameTimer;
@@ -92,17 +92,26 @@ public class Server implements IServer
 
     public void removeClient(Socket socket)
     {
-        for(Map.Entry<ClientSocket, Player> p : playersInQueue.entrySet()) {
-            if(p.getKey().getSocket() == socket) {
-                playersInQueue.remove(p);
+        for(Map.Entry<ClientSocket, Player> entry: playersInQueue.entrySet()) {
+            if(entry.getKey().getSocket() == socket)
+                playersInQueue.remove(entry.getKey());
+        }
+        Iterator<Map.Entry<ClientSocket,Player>> iterator = playersInGame.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<ClientSocket,Player> entry = iterator.next();
+            if(entry.getKey().getSocket() == socket){
+               /* pokerGame.setPlayerLeft(playersInGame.get(entry.getKey()).getPlace());
+                if(pokerGame.getWinnerIndex() > -1) {
+                    isGameStarted = false;
+                    startGameTimer(0);
+                }
+                sendUpdateToPlayers();*/
+                iterator.remove();
             }
         }
-        for(Map.Entry<ClientSocket, Player> p : playersInGame.entrySet()) {
-            if(p.getKey().getSocket() == socket) {
-                playersInQueue.remove(p);
-            }
-        }
+
         clients.remove(socket);
+        clientsCount--;
     }
 
     private void waitForClient()
@@ -176,12 +185,14 @@ public class Server implements IServer
         info[0] = gson.fromJson(info[0], String.class);
         String commandName = info[0];
         if(commandName.equals("SendPlayerMoveToServer")) {
+            if(pokerGame.getWinnerIndex() > -1) return;
             int playerWhoMovedPlace = gson.fromJson(info[1], int.class);
             String playerMoveType = gson.fromJson(info[2], String.class);
             int bet = gson.fromJson(info[3], int.class);
             pokerGame.move(playerWhoMovedPlace, playerMoveType, bet);
             gameTimer.cancel();
             gameTimer.purge();
+            System.out.println("Execute move, winner: " + pokerGame.getWinnerIndex());
             if(pokerGame.getWinnerIndex() > -1) {
                 startGameTimer(5000);
             } else {
@@ -192,14 +203,14 @@ public class Server implements IServer
     }
     public void sendUpdateToPlayers() {
         CommandModel commandModel = new CommandModel();
-        commandModel.set(CommandEnum.SendUpdateInfoToClient.toString(), pokerGame.getPlayers(), pokerGame.getCardsOnTable(), pokerGame.getPlayerIndexTurn(),pokerGame.getPot(), pokerGame.getBet(), pokerGame.getWinnerIndex());
+        commandModel.set(CommandEnum.SendUpdateInfoToClient.toString(), pokerGame);
         for(Map.Entry<ClientSocket, Player> p : playersInGame.entrySet()) {
             p.getKey().sendMessage(commandModel.getString());
         }
     }
     public void sendPokerInfoToPlayers() {
         CommandModel commandModel = new CommandModel();
-        commandModel.set(CommandEnum.SendPokerInfoToClient.toString(), pokerGame.getPlayers(), pokerGame.getCardsOnTable());
+        commandModel.set(CommandEnum.SendPokerInfoToClient.toString(), pokerGame);
         for(Map.Entry<ClientSocket, Player> p : playersInGame.entrySet()) {
             p.getKey().sendMessage(commandModel.getString());
         }
@@ -207,15 +218,20 @@ public class Server implements IServer
 
     public void startGameTimer(int delay) {
         gameTimer = new Timer();
+        System.out.println("Timer started. Winner: " + pokerGame.getWinnerIndex());
         gameTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                System.out.println("Timer started. Winner: " + pokerGame.getWinnerIndex());
                 if(pokerGame.getWinnerIndex() > -1) {
                     checkForStartGame();
                 }
                 else {
                     pokerGame.move(pokerGame.getPlayerIndexTurn(), "FOLD", 0);
+                    if(pokerGame.getWinnerIndex() > -1) {
+                        startGameTimer(5000);
+                    } else {
+                        startGameTimer(20000);
+                    }
                     sendUpdateToPlayers();
                 }
             }
@@ -225,6 +241,7 @@ public class Server implements IServer
     public void startGame() {
         pokerGame.setPlayersAtTheTable(playersInGame.size());
         pokerGame.startGame();
+
         ArrayList<Player> pokerPlayers = pokerGame.getPlayers();
         int counter = 0;
         CommandModel commandModel = new CommandModel();
@@ -242,6 +259,7 @@ public class Server implements IServer
         if(getClientsCount() < 2) return;
         for(Map.Entry<ClientSocket, Player> p : playersInQueue.entrySet()) {
             playersInGame.put(p.getKey(), new Player(0));
+            System.out.println("New Player added to game!");
         }
         playersInQueue.clear();
         if(playersInGame.size() > 1) {
